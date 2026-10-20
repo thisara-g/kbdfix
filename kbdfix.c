@@ -11,6 +11,21 @@ static int nbad;
 module_param_array(bad, int, &nbad, 0444);
 MODULE_PARM_DESC(bad, "Comma-separated keycodes to block, e.g. bad=30,45");
 
+static bool kbdfix_filter(struct input_handle *handle, unsigned int type,
+			  unsigned int code, int value)
+{
+	int i;
+
+	if (type != EV_KEY)
+		return false;
+
+	for (i = 0; i < nbad; i++)
+		if (bad[i] == code)
+			return true;
+
+	return false;
+}
+
 static int kbdfix_connect(struct input_handler *handler, struct input_dev *dev,
 			  const struct input_device_id *id)
 {
@@ -65,6 +80,7 @@ static const struct input_device_id kbdfix_ids[] = {
 static struct input_handler kbdfix_handler = {
 	.name		= "kbdfix",
 	.id_table	= kbdfix_ids,
+	.filter		= kbdfix_filter,
 	.connect	= kbdfix_connect,
 	.disconnect	= kbdfix_disconnect,
 };
