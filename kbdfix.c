@@ -1,6 +1,8 @@
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 #include <linux/module.h>
 #include <linux/input.h>
+#include <linux/slab.h>
+#include <linux/string.h>
 
 #define MAX_BAD 16
 
@@ -12,12 +14,44 @@ MODULE_PARM_DESC(bad, "Comma-separated keycodes to block, e.g. bad=30,45");
 static int kbdfix_connect(struct input_handler *handler, struct input_dev *dev,
 			  const struct input_device_id *id)
 {
-	pr_info("offered: %s\n", dev->name);
-	return -ENODEV;
+	struct input_handle *handle;
+	int err;
+
+	if (!dev->name || strcmp(dev->name, "AT Translated Set 2 keyboard"))
+		return -ENODEV;
+
+	handle = kzalloc(sizeof(*handle), GFP_KERNEL);
+	if (!handle)
+		return -ENOMEM;
+
+	handle->dev = dev;
+	handle->handler = handler;
+	handle->name = "kbdfix";
+
+	err = input_register_handle(handle);
+	if (err)
+		goto err_free;
+
+	err = input_open_device(handle);
+	if (err)
+		goto err_unregister;
+
+	pr_info("connected to %s\n", dev->name);
+	return 0;
+
+err_unregister:
+	input_unregister_handle(handle);
+err_free:
+	kfree(handle);
+	return err;
 }
 
 static void kbdfix_disconnect(struct input_handle *handle)
 {
+	pr_info("disconnected from %s\n", handle->dev->name);
+	input_close_device(handle);
+	input_unregister_handle(handle);
+	kfree(handle);
 }
 
 static const struct input_device_id kbdfix_ids[] = {
